@@ -1,0 +1,371 @@
+## Eisenhower Tunnel
+The following script examines traffic data at the Eisenhower tunnel on I70 East of Denver is Colorado, USA. 
+Data can be found here:
+
+https://dtdapps.coloradodot.info/otis/TrafficData
+
+If you are unfamiliar with the tunnel see the Wiki article here
+https://en.wikipedia.org/wiki/Eisenhower_Tunnel
+
+Monthly data example from March 2022
+
+https://dtdapps.coloradodot.info/otis/TrafficData/GetDailyTrafficVolumeForStationByMonth/000106/true/2022/3
+
+### Load Packages
+
+#Load pertinent packages
+
+#https://dtdapps.coloradodot.info/otis/TrafficData/GetDailyTrafficVolumeForStationByMonth/000106/true/2022/3
+
+import os
+import sys
+import time
+from urllib.request import urlopen
+from bs4 import BeautifulSoup
+from collections import defaultdict
+
+
+import pandas as pd
+pd.set_option('display.max_columns', None)
+
+
+# Import seaborn
+import seaborn as sns
+
+### Data Scraping
+
+We will be working with hourly count data collected by CDOT (Colorado Dept of Transport) at numerous stations across Colorado.  We will be examining the station at the Eisehower tunnel. Data are stored with one column per hour and one row per day for each month. As written the script will pull just over 3 years of data.
+
+# specify stations and dates of interest
+
+# url to format: station ID, year, month
+url =  "https://dtdapps.coloradodot.info/otis/TrafficData/GetDailyTrafficVolumeForStationByMonth/{}/true/{}/{}"
+
+
+#station '000106' is on the eisenhower tunnel I70
+stations = ['000106']
+
+
+# period of interest
+years=['2019','2020','2021','2022']
+months= range(1, 13)
+
+
+
+### Define web scraping function
+define function to pull hourly data for months and years of interest for the Eisenhower station ('000106').
+
+#define function to pull hourly data for months and years of interest
+def get_data(url, station_entry, year_entry, month_entry):
+     data =[]                    
+   
+     for station in station_entry:
+        for year in year_entry:
+            for month in month_entry:
+                r2=requests.get(url.format(station,year,month))
+                df_list2 = pd.read_html(r2.text, skiprows=0)
+                df2=df_list2[0]  #confirmed type is pd.df
+                data.append(df2)                             
+                
+        return data 
+        
+station=get_data(url,stations,years,months)  
+
+
+
+#pd.DataFrame(final)
+# Examine first few rows of the data frame.
+traffic_pd=pd.concat(station, axis=0)
+traffic_pd.head()
+
+# this may take 30 seconds to a  minute.
+
+# transform wide data to long
+
+traffic_long = traffic_pd.melt(
+    id_vars=['Count Date', 'Dir'],
+    var_name='hour', value_name='vehicles_per_hour')
+
+
+traffic_long['hour']=traffic_long['hour'].replace("h", "",regex=True)
+traffic_long['hour']=traffic_long['hour'].astype('int')
+
+#change vehicles to integer
+traffic_long['vehicles_per_hour']=traffic_long['vehicles_per_hour'].astype('int')
+
+# Specify input format
+traffic_long["Count Date"] =  pd.to_datetime(traffic_long["Count Date"], format="%m/%d/%Y")
+#traffic_long["Dir"] =  traffic_long['Dir'].astype("S")
+
+#rename columns
+traffic_long=traffic_long.rename(columns={"Count Date": "count_date", "Dir": "direction"})
+
+#sort by date, hour
+traffic_long = traffic_long.sort_values(by = ['count_date' ,'hour'])
+
+#print first few rows
+traffic_long.head()
+
+#print main features
+traffic_long.dtypes
+
+#Data dimensions
+print( "The extracted data have the following dimensions" +  str(traffic_long.shape))
+
+
+### Quality check
+Examine data for missing values and 5 point summaries
+
+
+
+# count missing values in each column
+print(traffic_long.isnull().sum())
+
+#Check total counts
+traffic_long.count()
+
+
+#Check range of values
+def min_max(df,col):
+    max_value=df[col].max()
+    min_value=df[col].min()
+    print(min_value,max_value)
+    
+    
+min_max(traffic_long, 'count_date')    
+#
+min_max(traffic_long, 'vehicles_per_hour')
+
+
+
+### Summary
+Examine data for missing values and 5 point summaries
+
+# calculate a 5-number summary of traffic data
+from numpy import percentile
+from numpy.random import rand
+# generate data sample
+# calculate quartiles
+quartiles = percentile(traffic_long['vehicles_per_hour'], [25, 50, 75])
+# calculate min/max
+data_min, data_max = traffic_long['vehicles_per_hour'].min(), traffic_long['vehicles_per_hour'].max()
+# print 5-number summary
+print('Min: %.3f' % data_min)
+print('Q1: %.3f' % quartiles[0])
+print('Median: %.3f' % quartiles[1])
+print('Q3: %.3f' % quartiles[2])
+print('Max: %.3f' % data_max)
+
+# get value counts for each year.
+
+daily_traffic['year'].value_counts()
+
+Every day with data has 24 rows (one row per hour in the day) but none of the years are fully complete (365 days). ~5% of each year is missing. We will need to decide to identify and impute these missing points or to proceed without them.  The data appear to be missing at random due to outages at certain stations.  We will need to assess which days are non continuous.
+
+### Add columns to describe date
+We will calculate the day of the year, day of the week, specify weekends, and Holidays
+
+# create the hourly traffic data frame
+hourly_traffic = traffic_long
+
+# calculate the day of the year for time_series plots
+hourly_traffic['day_of_year'] = hourly_traffic['count_date'].dt.dayofyear
+
+#calculate day of week number (0 = Monday, 6= Sunday)
+hourly_traffic['day_of_week']=hourly_traffic['count_date'].dt.day_of_week
+
+# designate weekend ()
+hourly_traffic.loc[hourly_traffic['day_of_week'] >=5, 'weekend'] = 1 
+hourly_traffic.loc[hourly_traffic['day_of_week'] <5, 'weekend'] = 0 
+
+
+# mark American holidays. Note that holidays that fall on weekedns are applied in the preceding or proceeding week.
+from pandas.tseries.holiday import USFederalHolidayCalendar as calendar
+
+cal = calendar()
+holidays = cal.holidays(start=hourly_traffic['count_date'].min(),
+                        end=hourly_traffic['count_date'].max()).to_pydatetime()
+
+#designate which days are holidays
+hourly_traffic['holiday'] = hourly_traffic['count_date'].isin(holidays)
+
+#check that tables look good by printing the first few rows.
+#hourly_traffic
+hourly_traffic.head()
+hourly_traffic['day_of_week'].max()
+
+
+
+#identify a random date, filter to date of interest, pull the whole week
+import datetime as dt
+import random
+
+# select a random date, plot vehicle counts for that day.
+min_date= hourly_traffic['count_date'].min()
+max_date= hourly_traffic['count_date'].max()
+
+
+#set seed
+random.seed(125)
+
+#get random date between the min and max for the dataset 
+time_between_dates = max_date - min_date
+days_between_dates = time_between_dates.days
+random_number_of_days = random.randrange(days_between_dates)
+random_date = min_date + timedelta(days=random_number_of_days)
+
+#random day in the data
+random_date
+
+#get day of week, create lower and upper bound for filter to 1 random week
+#Monday is 0, Sunday is 6
+random_day_of_week=  random_date.day_of_week
+day_to_add= 6-random_day_of_week
+day_to_sub= 0+random_day_of_week
+#
+#day_to_add
+#day_to_sub
+
+
+#create lower and upper bound filter
+upper_bound= random_date + timedelta(days=day_to_add)
+#upper_bound
+
+lower_bound= random_date - timedelta(days=day_to_sub)
+#lower_bound
+
+#set mask for date filter
+mask = (hourly_traffic['count_date'] >= lower_bound) & (hourly_traffic['count_date'] <= upper_bound)
+
+#filter data to 1 random week
+print("The first table is for one week that contains our random day ")
+one_week = hourly_traffic.loc[mask]
+one_week.head()
+one_week.shape
+
+#filter data to 1 random day
+print("The second tables is for one random day ")
+one_day= hourly_traffic.loc[hourly_traffic['count_date'] == random_date]
+one_day.head()
+one_day.shape
+
+one_week.dtypes
+
+
+### Create Plots to examine daily and weekly trends
+
+Now that the data are mined and confirmed to be in good order with minimal missingness we want to get  a feel for any cyclicity in the data.  Traffic counts are a product of road usage.  Given the location of the Eisehower tunnel we will geta  good sense of when people are accessing the mountains.  I70 is a busy interstate and through traffic will be a major component of daily use; however, residents of the front range will drive through the tunnel to access mountain recreation.  We should then expect heavy usage during certain seasons, weekends, and holidays.  We will now examine a random day and random week for patterns in the data.  We will include direction to get a feel for when day-trippers may be returning home from the mountains.
+
+
+# Daily Plot
+
+print("This is a  daily plot for a  random day with direction ")
+sns.lineplot(data=one_day, x="hour", y="vehicles_per_hour", hue="direction").set(
+    title="Vehicles per hour for one random day")
+
+sns.set(rc = {'figure.figsize':(25,5)})
+
+# weekly plot random week
+
+print("This is a  daily plot for a  random day with direction ")
+sns.scatterplot(data=one_week, x="count_date", y="vehicles_per_hour", hue="direction").set(
+    title="Vehicles per hour for one random week")
+
+sns.set(rc = {'figure.figsize':(25,5)})
+
+
+### uh oh.  
+We need to add the hour to the traffic date to get the true time of the count.  Plots normalized to hour are fine, but not those referencing date.
+
+# The following script segment will add the hours to our sample date to show changes on the x-axis.
+
+#add hours to datetime
+def add_hours(df, date_col,time_col):
+    date=df[date_col]
+    
+    #hours= int(df[time_col])
+    new_date= df[date_col]+ timedelta(hours=time_col)
+    return new_date
+add_hours(one_week, "count_date","hour")
+
+#one_week['count_date_time'] = 
+#one_week['count_date'] + timedelta(hours=hour)
+##final_time = given_time + timedelta(hours=n)
+#one_week.dtypes
+
+# calculate the daily traffic totals
+# Calculate daily sums regardless of direction
+daily_traffic = traffic_long.groupby('count_date').sum()
+#daily_traffic['day_of_year'] = daily_traffic['count_date'].dt.dayofyear
+daily_traffic.reset_index(inplace=True)
+daily_traffic = daily_traffic.rename(columns = {'index':'count_date'})
+
+daily_traffic=daily_traffic.rename(columns={"vehicles_per_hour": "vehicles_per_day"})
+
+##calculate day of week number (0 = Monday, 6= Sunday)
+daily_traffic['day_of_year'] = daily_traffic['count_date'].dt.dayofyear
+daily_traffic['day_of_week']=daily_traffic['count_date'].dt.day_of_week
+# designate weekend ()
+daily_traffic.loc[daily_traffic['day_of_week'] >=5, 'weekend'] = 1 
+daily_traffic.loc[daily_traffic['day_of_week'] <5, 'weekend'] = 0 
+
+#designate which days are holidayss
+daily_traffic['holiday'] = daily_traffic['count_date'].isin(holidays)
+
+daily_traffic['year'] = pd.DatetimeIndex(daily_traffic['count_date']).year
+#
+
+daily_traffic.head()
+daily_traffic.shape
+
+
+
+# get value counts for each year.
+
+daily_traffic['year'].value_counts()
+
+
+# Plot all time
+sns.lineplot(data=daily_traffic, x="count_date", y="vehicles_per_day").set(
+    title="Vehicles per day for period of interest")
+sns.set_style("whitegrid")
+sns.set(rc = {'figure.figsize':(18,8)})
+#Plot standardized to day of year
+
+
+
+
+
+#Plot standardized to day of year Broken out by year
+sns.lineplot(data=daily_traffic, x="day_of_year", y="vehicles_per_day", hue="year")
+
+
+
+
+
+### Visual Exploration
+
+#create histogram of vehicles per hour
+
+traffic_long.vehicles_per_hour.plot(kind='hist',subplots=True,sharex=True,sharey=True,title='Vehicles per hour')
+
+
+# create a visual for the total traffic in a day in time series,  by year
+
+
+
+
+#empty=[]
+#url1="https://dtdapps.coloradodot.info/otis/TrafficData/GetDailyTrafficVolumeForStationByMonth/000106/true/2021/1"
+#r1 = requests.get(url1)
+#df_list1 = pd.read_html(r1.text)
+#df1 = df_list1[0]
+#
+#
+#url2="https://dtdapps.coloradodot.info/otis/TrafficData/GetDailyTrafficVolumeForStationByMonth/000106/true/2020/3"
+#r2 = requests.get(url2)
+#df_list2 = pd.read_html(r2.text)
+#df2=df_list2[0]
+#
+#df2.head()
+#df1.head()
