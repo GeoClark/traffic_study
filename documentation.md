@@ -125,14 +125,41 @@ The manually-specified ARIMA was (2,0,2).
 The manual ARIMA was specified using a pdq of 2,0,2 respectively. The first and last vlaue are using the previous 2 rows to predict a given row. the d=0, indicates that there's no trend in our data and that we don't need to difference the data. 
 The predictions in the training set fit the data very well, the predictions to the test set leave much to be desired. The model does predict relatively higher values and lower values that correspond with highs and lows in the test set but the magnitude and fidelity of the predictions are way off.
 
-A Python package designed to solve for the ideal ARIMA hyperpareters was also used.  The auto-ARIMA selected a model with a lower AIC then the manual-ARIMA.  The auto-ARIMA selected the ideal pd,q as (1,0,1) respectively. The forecast performed slightly better than the manual-ARIMA but the fit left a lot to be desired.  the plot is included in the notebook but excluded from this documentation. 
+A Python package designed to solve for the ideal ARIMA hyperpareters was also used.  The auto-ARIMA selected a model with a lower AIC then the manual-ARIMA.  The auto-ARIMA selected the ideal pd,q as (2,0,0) respectively. The forecast performed slightly better than the manual-ARIMA but the fit left a lot to be desired.  the plot is included in the notebook but excluded from this documentation. 
 
 
 ## SARIMA
-SARIMA is an ARIMA model with a seasonal component and has an additional 4 hyperparameters that define the seasonality to be used for predictions.
-## Prophet
+SARIMA is an ARIMA model with a seasonal component and has an additional 3 hyperparameters that define the seasonality to be used for predictions.
+The auto-SARIMA package was used to solve for the ideal tuning parameters.  A wide range of lags was used to ensure the model was considering all relevant solutions. Similarly to the auto-ARIMA the model selected low hyperparamters values.  The ideal parameters were (1,0,1)(0,0,1)(12).  The "12" indicates the seasonality is 12 months.  The Auto-SARIMA improved the AIC very slightly from 6792 to 6787 (essentially identical).
+The forecasted values using the SARIMA do not compare favorably with the test data (*Figure 15*).
+![image](https://user-images.githubusercontent.com/30851535/175836795-0feb60f7-e929-4db8-888f-d293bb60c191.png)
+*Figure 15: Auto-Sarima forecasts vs the test set.  the model performs very poorly.*
 
-## Hourly Model
+Despite autotuning the auto-ARIMA and auto-SARIMA never approximated the trends in the test set.  The Prophet package developed by Facebook was implemented next.
+
+## Prophet
+Despite a rigorous attempt to fit the ARIMA and SARIMA models both manually and automatically the "best" models were relatively poor.  Next we will experiment using the Prophet time series forecasting package developed by Facebook.
+
+Prophet has several advantages over the conventional statistical methodologies.  prophet is an additive regression model with a piecewise linear growth trend, an annual seasonal model, and a weekly seasonal model.
+1) Prophet accounts for the  impacts of holidays, 2) Prophet can automatically deretect changepoints in time-series trends, and 3) automatically characterize weekly and annual seasonality.  The Prophet package excels with making forecasts on data with similar to cyclicity we observe in the traffic data.
+
+### Weekly Model
+
+The prophet model was first fitted on the weekly traffic data.  The fits were way better than the ARIMA and SARIMA methods (*Figure 16*).
+
+![image](https://user-images.githubusercontent.com/30851535/175836781-3d48ebf2-206f-47a3-a3f8-1c90aca45a3a.png)
+*Figure 16:Weekly Forecasted traffic counts vs weekly actual traffic counts using Prophet*
+The weekly Prophet model is doing a good job of following the trends.  Interestingly there appears to be a trend with annual traffic increasing through 2019 and declining after 2020.  We had concluded there was no such trned when we applied the AD Fuller test on the hourly and weekly data.  Although the actual traffic counts fall within the 95% confidence interval of the predictions the predicitons are typically low of actuals.  The residuals are greatest in the lows for the Spring and Fall.  2021 isn't an ideal year to use as a test set as there was a mudslide in the Summer of 2021 that forced a road closure and several months of construction delays that certainly impacted drivers' route choice.  Regardless the model outperformed the otehr methods.  
+Prophet allows the user to examine the components of the model.  The components are shown in *Figure 17*. 
+
+![image](https://user-images.githubusercontent.com/30851535/175837748-49adee37-497d-4e3b-8e87-ea46bd50f37b.png)
+*Figure 17: Model components.  Prophet shows the impacts of an annual trend as well as any monthly seasonality.*
+
+*Figure 17* indicates an an upward annual trend in traffic data with a reduction since 2019.  Also, the model indicates high seasonality assocciated with the months of the year.  this matched what we see in thea ctual data.  The Prophet package is doing a good job of approximating weekly data. Prophet was then deployed to predict hourly traffic counts.
+
+### Hourly Model
+
+
 ### Prophet
 
 # Final thoughts
