@@ -143,7 +143,7 @@ Despite a rigorous attempt to fit the ARIMA and SARIMA models both manually and 
 Prophet has several advantages over the conventional statistical methodologies.  prophet is an additive regression model with a piecewise linear growth trend, an annual seasonal model, and a weekly seasonal model.
 1) Prophet accounts for the  impacts of holidays, 2) Prophet can automatically deretect changepoints in time-series trends, and 3) automatically characterize weekly and annual seasonality.  The Prophet package excels with making forecasts on data with similar to cyclicity we observe in the traffic data.
 
-### Weekly Model
+### Weekly Prophet Model
 
 The prophet model was first fitted on the weekly traffic data.  The fits were way better than the ARIMA and SARIMA methods (*Figure 16*).
 
@@ -157,14 +157,33 @@ Prophet allows the user to examine the components of the model.  The components 
 
 *Figure 17* indicates an an upward annual trend in traffic data with a reduction since 2019.  Also, the model indicates high seasonality assocciated with the months of the year.  this matched what we see in thea ctual data.  The Prophet package is doing a good job of approximating weekly data. Prophet was then deployed to predict hourly traffic counts.
 
-### Hourly Model
+### Hourly Prophet Model
 
+The hourly prophet model performs semi-satisfactorily "out of the box" (*Figure 18*). 
+![image](https://user-images.githubusercontent.com/30851535/175837986-4194e056-d10c-4567-a9b6-77a2433f1266.png)
+*Figure 18: A plot of forecasts from the hourly prophet model (red) vs actuals with the 95% prediction interval.*  
 
-### Prophet
+The hourly prophet model is failing to capture the peak traffic patterns observed on Weekends. The weekend troughs are also pdicted much lower than expected. in most cases the predicitons fall within the 95% confidence interval with the exception of weekends and holidays. We won't spend more time here but additional tuning would likely help the model. We could also explore "chaining" two models where we use the westbound traffic to predict eastbound traffic. Overall, the model is responding to the fluctuations in the data but improvements are likely possible and necessary. Holidays need to be added seperately to Prophet but that would likely greatly enhance the performance of the model. The model is occassionally predicting negative values which is impossible in this use case. We could try a log transform or scaling to minimize the number of negative values.
+The model components of the model resonate with the trends observed in the data (*Figure 19*).
+
+![image](https://user-images.githubusercontent.com/30851535/175838087-fc9ea5e1-3084-4e13-8bfe-b74f7fc18d1a.png)
+*Figure 19: Hourly Model components.  Prophet shows the impacts of an annual trend as well as any monthly seasonality.*
+*Figure 19* puts everything together. The top plot indicates that the hourly data have no underlying trends.  this matches the findings of the ARIMA and SARIMA but contradicts the weekly Prophet model.  Evidently there's an underlying trend in the weekly traffic values but not in the hourly values.  The last three subplots of *Figure 19* indicate strong relationships between model the Prophet predictions and the day of the week, month of the year, and time of day.  These plots match very well with our observations in the data (heatmaps of *Figures 8-10*) 
+The hourly Prophet model is doing a good job of approximating the cyclity of the data but it is not capturing  the weekend or holiday peaks. Prophet has hyperparemeters to better account for this and tweaks should be considered.  regardless it is clear that Prophet has advantages over the other 4 models we considered.
+
+Error metrics: RMSE = 322
 
 # Final thoughts
 
- ## Findings
  ## Improvements
 
+There's additional work to be done in tuning of the Prophet model to better predict peak vehicle counts on holidays and weekends.
+Here's some of the future work to be considered:
 
+1) update weather data source to include 2021
+2) Incorporate weather data into the traffic predictions
+3) Tune Prophet hyperparameters to better fit the training data
+4) Add a feature or break-point for 2020 to mark the pandemic as non-representative.
+5) Experiment with chaining east and west bound traffic models
+6) Experimment with other modeling algorithms including LSTM or Random Forest
+7) Negative predictions are nonsensible. Consider transforming data to a square rt or standardization.
