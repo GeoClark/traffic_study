@@ -16,7 +16,7 @@ Figure 1: Daily traffic data plotted by time with one line for each year.
 ### Sources
 
 Hourly data, for two directions, were pulled for years 2015-2021 from CDOT (Colorado Department of Transit).  
-  Hourly weather data were pulled from the nearest station using the Metestat package.  The weather data from the Meteostat package were only available  through 2020.
+  Hourly weather data were pulled from the nearest station using the Meteostat package.  The weather data from the Meteostat package were only available  through 2020.
 
 
 ### Data Cleaning
